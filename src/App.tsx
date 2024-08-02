@@ -1,37 +1,88 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import appLogo from '/favicon.svg'
-import PWABadge from './PWABadge.tsx'
-import './App.css'
+import PWABadge from "./PWABadge.tsx";
+import { useState, useEffect, useRef } from "react";
+import Peer, { DataConnection } from "peerjs";
 
-function App() {
-  const [count, setCount] = useState(0)
+const App = () => {
+  const [peerId, setPeerId] = useState<string>("");
+  const [peer, setPeer] = useState<Peer | null>(null);
+  const [conn, setConn] = useState<DataConnection | null>(null);
+  const [messages, setMessages] = useState<
+    { from: "local" | "remote"; text: string }[]
+  >([]);
+  const messageRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const peer = new Peer();
+    setPeer(peer);
+
+    peer.on("open", (id) => {
+      setPeerId(id);
+    });
+
+    peer.on("connection", (connection) => {
+      setConn(connection);
+      setupConnection(connection);
+    });
+
+    return () => {
+      peer.disconnect();
+    };
+  }, []);
+
+  const setupConnection = (connection: DataConnection) => {
+    connection.on("data", (data) => {
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { from: "remote", text: data },
+      ]);
+    });
+  };
+
+  const sendMessage = () => {
+    if (conn && messageRef.current?.value) {
+      conn.send(messageRef.current.value);
+      setMessages((prevMessages) => [
+        ...prevMessages,
+        { from: "local", text: messageRef.current.value },
+      ]);
+      messageRef.current.value = "";
+    }
+  };
+
+  const connectToPeer = (peerId: string) => {
+    if (peer) {
+      const connection = peer.connect(peerId);
+      connection.on("open", () => {
+        setConn(connection);
+        setupConnection(connection);
+      });
+    }
+  };
 
   return (
-    <>
+    <div>
+      <h1>PeerJS Chat App</h1>
+      <p>Your ID: {peerId}</p>
+      <input
+        type="text"
+        placeholder="Peer ID to connect"
+        onBlur={(e) => connectToPeer(e.target.value)}
+      />
       <div>
-        <a href="https://vitejs.dev" target="_blank">
-          <img src={appLogo} className="logo" alt="cli-chat logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        {messages.map((msg, index) => (
+          <div
+            key={index}
+            style={{ textAlign: msg.from === "local" ? "right" : "left" }}
+          >
+            <span>{msg.text}</span>
+          </div>
+        ))}
       </div>
-      <h1>cli-chat</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <input type="text" ref={messageRef} placeholder="Type your message" />
+      <button onClick={sendMessage}>Send</button>
       <PWABadge />
-    </>
-  )
-}
+    </div>
+  );
+};
 
-export default App
+export default App;
