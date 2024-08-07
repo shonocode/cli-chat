@@ -1,15 +1,16 @@
 import PWABadge from "./PWABadge.tsx";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Peer, { DataConnection } from "peerjs";
 import "./App.css";
-import * as CONST from "./Consts.ts";
-
-const OFFLINE = 0;
-const ONLINE = 1;
-const LOGGED_IN = 2;
-const CONNECTING = 3;
-const CONNECTED = 4;
-const CLI_CHAT = "CLI-CHAT";
+import {
+  OFFLINE,
+  ONLINE,
+  LOGGED_IN,
+  CONNECTING,
+  CONNECTED,
+  CLI_CHAT,
+  CLI_CHAT_AA,
+} from "./consts.ts";
 
 const App = () => {
   const [status, setStatus] = useState<number>(OFFLINE);
@@ -19,32 +20,18 @@ const App = () => {
   const [pendingConnection, setPendingConnection] =
     useState<DataConnection | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
-  const commandRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   useEffect(() => {
     const checkStatus = async () => {
-      setMessages([
-        `  ___ _    ___     ___ _  _   _ _____
- / __| |  |_ _|__ / __| || | /_\\_   _|
-| (__| |__ | |___| (__| __ |/ _ \\| |
- \\___|____|___|   \\___|_||_/_/ \\_\\_|
-  CLI based P2P chat app\n
-`,
-      ]);
+      setMessages([CLI_CHAT_AA]);
 
-      if (!navigator.onLine) {
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          `${CLI_CHAT}> Failed to Connect. Please try again.\n`,
-        ]);
-        return;
-      } else {
+      if (navigator.onLine) {
         setStatus(ONLINE);
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          `${CLI_CHAT}> Welcome to CLI-CHAT. Enter Your ID.\n`,
-        ]);
+        addTerminal(
+          CLI_CHAT,
+          "Welcome to CLI-CHAT. Type 'help' to see the list of commands."
+        );
       }
     };
 
@@ -57,29 +44,60 @@ const App = () => {
 
       const command = e.currentTarget.value;
 
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${peerId}> ${command}\n`,
-      ]);
+      addTerminal(peerId, command);
 
       runCommand(command);
-
       e.currentTarget.value = "";
     }
   };
 
   const runCommand = (command: string) => {
-    if (status === ONLINE) {
-      initializePeer(command);
-    } else if (status === LOGGED_IN) {
-      if (command.startsWith("connect ")) {
-        const id = command.split(" ")[1];
-        connectToPeer(id);
+    if (command.startsWith("login")) {
+      const parts = command.split(" ");
+      const id = parts.length > 1 ? parts[1] : "";
+      switch (status) {
+        case OFFLINE:
+          addTerminal(CLI_CHAT, "You are currently offline.");
+          break;
+        case ONLINE:
+          initializePeer(id);
+          break;
+        case LOGGED_IN:
+          addTerminal(CLI_CHAT, "You are already logged in.");
+          break;
+        default:
+          break;
       }
-    } else if (status === CONNECTING) {
+    }
+
+    if (command.startsWith("connect")) {
+      if (status === LOGGED_IN) {
+        const id = command.split(" ")[1];
+        id ? connectToPeer(id) : addTerminal(CLI_CHAT, "need a destination id.");
+      }
+    }
+
+    if (status === CONNECTING) {
       confirmConnect(command);
-    } else if (status === CONNECTED) {
+    }
+
+    if (status === CONNECTED) {
+      if (command === "disconnect") {
+        conn?.close();
+        setStatus(LOGGED_IN);
+      }
       sendMessage(command);
+    }
+
+    if (command === "logout") {
+      setStatus(ONLINE);
+      peer?.destroy();
+      addTerminal(CLI_CHAT, "logout.");
+      setPeer(null);
+    }
+
+    if (command === "help") {
+      addTerminal(CLI_CHAT, "Commands: login, connect, disconnect, logout, help");
     }
   };
 
@@ -91,42 +109,32 @@ const App = () => {
     peer.on("open", (id) => {
       setPeerId(id);
       setStatus(LOGGED_IN);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> Your ID has been set to ${id}\n`,
-      ]);
+      addTerminal(CLI_CHAT, `Your ID has been set to ${id}`);
       setIsProcessing(false);
     });
 
     peer.on("connection", (connection) => {
-      setStatus(CONNECTING);
-      setPendingConnection(connection);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> ${connection.peer} wants to connect. Do you accept?(y/n)`,
-      ]);
+      connection.on("open", () => {
+        setStatus(CONNECTING);
+        setPendingConnection(connection);
+        addTerminal(
+          CLI_CHAT,
+          `${connection.peer} wants to connect. Do you accept?(y/n)`
+        );
+      });
     });
 
     peer.on("disconnected", () => {
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> disconnected.\n`,
-      ]);
+      addTerminal(CLI_CHAT, "disconnected.");
     });
 
     peer.on("close", () => {
       setStatus(ONLINE);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> logged out.\n`,
-      ]);
+      addTerminal(CLI_CHAT, "Connection closed.");
     });
 
     peer.on("error", (err) => {
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> ${err.message}\n`,
-      ]);
+      addTerminal(CLI_CHAT, err.message);
       setIsProcessing(false);
     });
   };
@@ -138,31 +146,21 @@ const App = () => {
       connection.on("open", () => {
         setStatus(CONNECTED);
         setConn(connection);
-
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          `${CLI_CHAT}> Connecting to ${destinationPeerId} ...\n`,
-        ]);
+        addTerminal(CLI_CHAT, `Connecting to ${destinationPeerId} ...`);
 
         connection.on("data", (data) => {
-          setMessages((prevMessages) => [...prevMessages, data]);
+          addTerminal(connection.peer, data as string);
         });
       });
 
       connection.on("error", (err) => {
         setStatus(LOGGED_IN);
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          `${CLI_CHAT}> Error connecting to ${destinationPeerId}: ${err.message}\n`,
-        ]);
+        addTerminal(CLI_CHAT, `Error connecting to ${destinationPeerId}: ${err.message}`);
       });
 
       connection.on("close", () => {
         setStatus(LOGGED_IN);
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          `${CLI_CHAT}> Connection to ${destinationPeerId} is closed.\n`,
-        ]);
+        addTerminal(CLI_CHAT, `Connection to ${destinationPeerId} closed.`);
       });
     }
   };
@@ -178,15 +176,12 @@ const App = () => {
       setStatus(CONNECTED);
       setConn(connection);
       connection.on("data", (data) => {
-        setMessages((prevMessages) => [...prevMessages, data]);
+        addTerminal(connection.peer, data as string);
       });
 
       connection.send(`${CLI_CHAT}> ${peerId} is connected with you.\n`);
 
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> ${connection.peer} is connected with you.\n`,
-      ]);
+      addTerminal(CLI_CHAT, `Connected to ${connection.peer}.`);
 
       setPendingConnection(null);
     } else if (command === "n") {
@@ -194,22 +189,20 @@ const App = () => {
 
       setStatus(LOGGED_IN);
       setPendingConnection(null);
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> Connection canceled.\n`,
-      ]);
+      addTerminal(CLI_CHAT, `Connection to ${connection.peer} canceled.`);
     } else {
-      setMessages((prevMessages) => [
-        ...prevMessages,
-        `${CLI_CHAT}> Invalid command.\n`,
-      ]);
+      addTerminal(CLI_CHAT, "Invalid response. Please enter 'y' or 'n'.");
     }
   };
 
   const sendMessage = (message: string) => {
     if (conn && conn.open) {
-      conn.send(`${peerId}> ${message}`);
+      conn.send(message);
     }
+  };
+
+  const addTerminal = (sender: string, message: string) => {
+    setMessages(prevMessages => [...prevMessages, `${sender}> ${message}\n`]);
   };
 
   return (
@@ -230,7 +223,6 @@ const App = () => {
               <input
                 className="command-input"
                 type="text"
-                ref={commandRef}
                 onKeyDown={handleInputKeyDown}
                 disabled={isProcessing}
               />
