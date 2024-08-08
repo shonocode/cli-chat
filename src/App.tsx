@@ -79,7 +79,7 @@ const App = () => {
         handleLogDeleteCommand(args);
         break;
       default:
-        handleDefaultCommand(action, command);
+        handleDefaultCommand(command);
         break;
     }
   };
@@ -217,7 +217,7 @@ const App = () => {
     }
   };
 
-  const handleDefaultCommand = (action: string, command: string) => {
+  const handleDefaultCommand = (command: string) => {
     if (status === CONNECTING) {
       confirmConnect(command);
     } else if (status === CONNECTED) {
