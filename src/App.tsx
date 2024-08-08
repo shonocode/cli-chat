@@ -1,4 +1,5 @@
 import PWABadge from "./PWABadge.tsx";
+import Terminal from "./Terminal.tsx";
 import { useState, useEffect } from "react";
 import Peer, { DataConnection } from "peerjs";
 import "./App.css";
@@ -23,81 +24,165 @@ const App = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   useEffect(() => {
-    const checkStatus = async () => {
-      setMessages([CLI_CHAT_AA]);
-
-      if (navigator.onLine) {
-        setStatus(ONLINE);
-        addTerminal(
-          CLI_CHAT,
-          "Welcome to CLI-CHAT. Type 'help' to see the list of commands."
-        );
-      }
-    };
-
-    checkStatus();
+    setMessages([CLI_CHAT_AA]);
+    addTerminal(
+      CLI_CHAT,
+      "Welcome to CLI-CHAT. Type 'help' to see the list of commands."
+    );
+    if (navigator.onLine) {
+      setStatus(ONLINE);
+    }
   }, []);
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
-
       const command = e.currentTarget.value;
-
       addTerminal(peerId, command);
-
       runCommand(command);
       e.currentTarget.value = "";
     }
   };
 
   const runCommand = (command: string) => {
-    if (command.startsWith("login")) {
-      const parts = command.split(" ");
-      const id = parts.length > 1 ? parts[1] : "";
-      switch (status) {
-        case OFFLINE:
-          addTerminal(CLI_CHAT, "You are currently offline.");
-          break;
-        case ONLINE:
-          initializePeer(id);
-          break;
-        case LOGGED_IN:
-          addTerminal(CLI_CHAT, "You are already logged in.");
-          break;
-        default:
-          break;
+    const [action, ...args] = command.split(" ");
+    if (!isAllowedAction(action)) {
+      addTerminal(CLI_CHAT, "Invalid command or incorrect status.");
+      return;
+    }
+    switch (action) {
+      case "login":
+        handleLoginCommand(args);
+        break;
+      case "connect":
+        handleConnectCommand(args);
+        break;
+      case "disconnect":
+        handleDisconnectCommand();
+        break;
+      case "logout":
+        handleLogoutCommand();
+        break;
+      case "help":
+        handleHelpCommand();
+        break;
+      case "log":
+        handleLogCommand(args);
+        break;
+      case "loglist":
+        handleLogListCommand();
+        break;
+      case "logdelete":
+        handleLogDeleteCommand(args);
+        break;
+      default:
+        handleDefaultCommand(action, command);
+        break;
+    }
+  };
+
+  const isAllowedAction = (action: string): boolean => {
+    switch (action) {
+      case "login":
+        return status === ONLINE;
+      case "connect":
+        return status === LOGGED_IN;
+      case "disconnect":
+        return status === CONNECTED;
+      case "logout":
+        return status === LOGGED_IN || status === CONNECTED;
+      case "help":
+      case "log":
+      case "loglist":
+      case "logdelete":
+        return true;
+      default:
+        return false;
+    }
+  };
+
+  const handleLoginCommand = (args: string[]) => {
+    const id = args[0] || "";
+    initializePeer(id);
+  };
+
+  const handleConnectCommand = (args: string[]) => {
+    const id = args[0];
+    id ? connectToPeer(id) : addTerminal(CLI_CHAT, "Need a destination ID.");
+  };
+
+  const handleDisconnectCommand = () => {
+    if (conn) {
+      conn.close();
+      setStatus(LOGGED_IN);
+      addTerminal(CLI_CHAT, "Disconnected.");
+    }
+  };
+
+  const handleLogoutCommand = () => {
+    peer?.destroy();
+    setStatus(ONLINE);
+    setPeer(null);
+    setPeerId("");
+    addTerminal(CLI_CHAT, "Logged out.");
+  };
+
+  const handleLogCommand = (args: string[]) => {
+    const dateTime = args[0] || "";
+    if (!dateTime) {
+      addTerminal(CLI_CHAT, "Usage: log <dateTime> (e.g., log 2024-12-01)");
+      return;
+    }
+    const log = getLog(dateTime);
+    log
+      ? addTerminal("", log)
+      : addTerminal(CLI_CHAT, "No logs found for the specified date.");
+  };
+
+  const handleLogListCommand = () => {
+    const keys = getAllLogKeys();
+    keys.length > 0
+      ? keys.forEach((key) => addTerminal(CLI_CHAT, key))
+      : addTerminal(CLI_CHAT, "No logs found.");
+  };
+
+  const handleLogDeleteCommand = (args: string[]) => {
+    const option = args[0] || "";
+
+    if (option === "all") {
+      localStorage.clear();
+      addTerminal(CLI_CHAT, "All logs have been deleted.");
+    } else {
+      const dateTime = option;
+      if (!dateTime) {
+        addTerminal(
+          CLI_CHAT,
+          "Usage: logdelete <dateTime> (e.g., logdelete 2025-07-05) or logdelete all"
+        );
+        return;
+      }
+
+      if (localStorage.getItem(dateTime)) {
+        localStorage.removeItem(dateTime);
+        addTerminal(CLI_CHAT, `Log for ${dateTime} has been deleted.`);
+      } else {
+        addTerminal(CLI_CHAT, "No logs found for the specified date.");
       }
     }
+  };
 
-    if (command.startsWith("connect")) {
-      if (status === LOGGED_IN) {
-        const id = command.split(" ")[1];
-        id ? connectToPeer(id) : addTerminal(CLI_CHAT, "need a destination id.");
-      }
-    }
+  const handleHelpCommand = () => {
+    addTerminal(
+      CLI_CHAT,
+      "Commands: login, connect, disconnect, logout, help, log <date>, loglist"
+    );
+  };
 
+  const handleDefaultCommand = (action: string, command: string) => {
     if (status === CONNECTING) {
-      confirmConnect(command);
-    }
-
-    if (status === CONNECTED) {
-      if (command === "disconnect") {
-        conn?.close();
-        setStatus(LOGGED_IN);
-      }
+      confirmConnect(action);
+    } else if (status === CONNECTED) {
       sendMessage(command);
-    }
-
-    if (command === "logout") {
-      setStatus(ONLINE);
-      peer?.destroy();
-      addTerminal(CLI_CHAT, "logout.");
-      setPeer(null);
-    }
-
-    if (command === "help") {
-      addTerminal(CLI_CHAT, "Commands: login, connect, disconnect, logout, help");
     }
   };
 
@@ -119,18 +204,19 @@ const App = () => {
         setPendingConnection(connection);
         addTerminal(
           CLI_CHAT,
-          `${connection.peer} wants to connect. Do you accept?(y/n)`
+          `${connection.peer} wants to connect. Do you accept? (y/n)`
         );
       });
     });
 
     peer.on("disconnected", () => {
-      addTerminal(CLI_CHAT, "disconnected.");
+      setStatus(ONLINE);
+      addTerminal(CLI_CHAT, "Disconnected.");
     });
 
     peer.on("close", () => {
       setStatus(ONLINE);
-      addTerminal(CLI_CHAT, "Connection closed.");
+      addTerminal(CLI_CHAT, "Logged out.");
     });
 
     peer.on("error", (err) => {
@@ -150,12 +236,16 @@ const App = () => {
 
         connection.on("data", (data) => {
           addTerminal(connection.peer, data as string);
+          saveLog(connection.peer, data as string);
         });
       });
 
       connection.on("error", (err) => {
         setStatus(LOGGED_IN);
-        addTerminal(CLI_CHAT, `Error connecting to ${destinationPeerId}: ${err.message}`);
+        addTerminal(
+          CLI_CHAT,
+          `Error connecting to ${destinationPeerId}: ${err.message}`
+        );
       });
 
       connection.on("close", () => {
@@ -165,28 +255,37 @@ const App = () => {
     }
   };
 
-  const confirmConnect = (command: string) => {
-    if (!pendingConnection) {
-      return;
-    }
+  const confirmConnect = (response: string) => {
+    if (!pendingConnection) return;
 
     const connection = pendingConnection;
 
-    if (command === "y") {
+    if (response === "y") {
       setStatus(CONNECTED);
       setConn(connection);
       connection.on("data", (data) => {
         addTerminal(connection.peer, data as string);
+        saveLog(connection.peer, data as string);
       });
 
-      connection.send(`${CLI_CHAT}> ${peerId} is connected with you.\n`);
+      connection.on("error", (err) => {
+        setStatus(LOGGED_IN);
+        addTerminal(
+          CLI_CHAT,
+          `Error connecting to ${connection.peer}: ${err.message}`
+        );
+      });
 
+      connection.on("close", () => {
+        setStatus(LOGGED_IN);
+        addTerminal(CLI_CHAT, `Connection to ${connection.peer} closed.`);
+      });
+
+      connection.send(`${peerId} is connected with you.`);
       addTerminal(CLI_CHAT, `Connected to ${connection.peer}.`);
-
       setPendingConnection(null);
-    } else if (command === "n") {
+    } else if (response === "n") {
       connection.close();
-
       setStatus(LOGGED_IN);
       setPendingConnection(null);
       addTerminal(CLI_CHAT, `Connection to ${connection.peer} canceled.`);
@@ -198,37 +297,44 @@ const App = () => {
   const sendMessage = (message: string) => {
     if (conn && conn.open) {
       conn.send(message);
+      saveLog(peerId, message);
     }
   };
 
   const addTerminal = (sender: string, message: string) => {
-    setMessages(prevMessages => [...prevMessages, `${sender}> ${message}\n`]);
+    setMessages((prevMessages) => [...prevMessages, `${sender}> ${message}\n`]);
+  };
+
+  const saveLog = (sender: string, message: string) => {
+    const timestamp = new Date();
+    const dateKey = `${timestamp.getFullYear()}-${String(
+      timestamp.getMonth() + 1
+    ).padStart(2, "0")}-${String(timestamp.getDate()).padStart(2, "0")}`;
+    const existingLog = localStorage.getItem(dateKey) || "";
+    localStorage.setItem(dateKey, `${existingLog}${sender}> ${message}\n`);
+  };
+
+  const getLog = (dateKey: string): string | null => {
+    return localStorage.getItem(dateKey);
+  };
+
+  const getAllLogKeys = (): string[] => {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      keys.push(localStorage.key(i) || "");
+    }
+    return keys;
   };
 
   return (
     <>
       <div className="crt">
-        <div className="terminal">
-          <div>
-            <div className="message">
-              {messages.map((msg, index) => (
-                <div key={index}>{msg}</div>
-              ))}
-            </div>
-            <div className="command">
-              <label>
-                {peerId}
-                {"> "}
-              </label>
-              <input
-                className="command-input"
-                type="text"
-                onKeyDown={handleInputKeyDown}
-                disabled={isProcessing}
-              />
-            </div>
-          </div>
-        </div>
+        <Terminal
+          peerId={peerId}
+          messages={messages}
+          isProcessing={isProcessing}
+          keyDownEvent={handleInputKeyDown}
+        />
       </div>
       <PWABadge />
     </>
