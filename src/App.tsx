@@ -136,7 +136,15 @@ const App = () => {
   const handleHelpCommand = () => {
     addTerminal(
       CLI_CHAT,
-      "Commands: login, connect, disconnect, logout, help, log <date>, loglist"
+      `Commands:
+      - login <id>: Set your peer ID and initialize the PeerJS instance. Example: login myPeerId
+      - connect <peerId> [<key>]: Connect to another peer. Optionally use encryption with a key. Example: connect peerId 123456
+      - disconnect: Disconnect from the current peer.
+      - logout: Log out from your current session and return to the online status.
+      - help: Show this help message.
+      - log <dateTime> [<key>]: Display log entries for the given date. Optionally decrypt with the provided key. Example: log 2024-12-01 123456
+      - loglist: List all available log dates.
+      - logdelete <dateTime> | all: Delete logs for the specified date or all logs. Example: logdelete 2024-12-01 or logdelete all`
     );
   };
 
