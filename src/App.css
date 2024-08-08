@@ -13,7 +13,11 @@ body{
     -webkit-font-smoothing: none;
     background-color: black;
     height: 100svh;
+    width: 100vw;
     white-space: pre;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 #root {
@@ -127,7 +131,10 @@ body{
 }
 
 .command {
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-all;
+  display: flex;
+  flex-wrap: wrap;
 }
 
 .command-input {
@@ -138,8 +145,7 @@ body{
   font-size: 16px;
   -webkit-font-smoothing: none;
   background-color: black;
-  /* white-space: pre; */
-  width: 100%;
+  flex-grow: 1;
   white-space: normal;
 }
 
@@ -149,6 +155,7 @@ body{
 
 .message {
   white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 input {

@@ -12,6 +12,7 @@ import {
   CLI_CHAT,
   CLI_CHAT_AA,
 } from "./consts.ts";
+import CryptoJS from "crypto-js";
 
 const App = () => {
   const [status, setStatus] = useState<number>(OFFLINE);
@@ -22,6 +23,7 @@ const App = () => {
     useState<DataConnection | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [secretKey, setSecretKey] = useState<string>("");
 
   useEffect(() => {
     setMessages([CLI_CHAT_AA]);
@@ -50,6 +52,7 @@ const App = () => {
       addTerminal(CLI_CHAT, "Invalid command or incorrect status.");
       return;
     }
+
     switch (action) {
       case "login":
         handleLoginCommand(args);
@@ -97,7 +100,7 @@ const App = () => {
       case "logdelete":
         return true;
       default:
-        return false;
+        return true;
     }
   };
 
@@ -108,7 +111,10 @@ const App = () => {
 
   const handleConnectCommand = (args: string[]) => {
     const id = args[0];
-    id ? connectToPeer(id) : addTerminal(CLI_CHAT, "Need a destination ID.");
+    const key = args[1] || "";
+    id
+      ? connectToPeer(id, key)
+      : addTerminal(CLI_CHAT, "Need a destination ID.");
   };
 
   const handleDisconnectCommand = () => {
@@ -127,16 +133,50 @@ const App = () => {
     addTerminal(CLI_CHAT, "Logged out.");
   };
 
+  const handleHelpCommand = () => {
+    addTerminal(
+      CLI_CHAT,
+      "Commands: login, connect, disconnect, logout, help, log <date>, loglist"
+    );
+  };
+
   const handleLogCommand = (args: string[]) => {
     const dateTime = args[0] || "";
+    const key = args[1] || "";
+
     if (!dateTime) {
-      addTerminal(CLI_CHAT, "Usage: log <dateTime> (e.g., log 2024-12-01)");
+      addTerminal(
+        CLI_CHAT,
+        "Usage: log <dateTime> [<key>] (e.g., log 2024-12-01 [key])"
+      );
       return;
     }
+
     const log = getLog(dateTime);
-    log
-      ? addTerminal("", log)
-      : addTerminal(CLI_CHAT, "No logs found for the specified date.");
+    if (log) {
+      const messages = log.split("\n").filter(Boolean);
+      messages.forEach((message) => {
+        const [sender, encryptedMessage] = message.split("> ");
+        if (key) {
+          try {
+            const decryptedMessage = CryptoJS.AES.decrypt(
+              encryptedMessage,
+              key
+            ).toString(CryptoJS.enc.Utf8);
+            addTerminal(sender, decryptedMessage);
+          } catch (e) {
+            addTerminal(
+              CLI_CHAT,
+              `Failed to decrypt message: ${encryptedMessage}`
+            );
+          }
+        } else {
+          addTerminal(sender, encryptedMessage);
+        }
+      });
+    } else {
+      addTerminal(CLI_CHAT, "No logs found for the specified date.");
+    }
   };
 
   const handleLogListCommand = () => {
@@ -148,7 +188,6 @@ const App = () => {
 
   const handleLogDeleteCommand = (args: string[]) => {
     const option = args[0] || "";
-
     if (option === "all") {
       localStorage.clear();
       addTerminal(CLI_CHAT, "All logs have been deleted.");
@@ -161,7 +200,6 @@ const App = () => {
         );
         return;
       }
-
       if (localStorage.getItem(dateTime)) {
         localStorage.removeItem(dateTime);
         addTerminal(CLI_CHAT, `Log for ${dateTime} has been deleted.`);
@@ -171,16 +209,9 @@ const App = () => {
     }
   };
 
-  const handleHelpCommand = () => {
-    addTerminal(
-      CLI_CHAT,
-      "Commands: login, connect, disconnect, logout, help, log <date>, loglist"
-    );
-  };
-
   const handleDefaultCommand = (action: string, command: string) => {
     if (status === CONNECTING) {
-      confirmConnect(action);
+      confirmConnect(command);
     } else if (status === CONNECTED) {
       sendMessage(command);
     }
@@ -202,10 +233,11 @@ const App = () => {
       connection.on("open", () => {
         setStatus(CONNECTING);
         setPendingConnection(connection);
-        addTerminal(
-          CLI_CHAT,
-          `${connection.peer} wants to connect. Do you accept? (y/n)`
-        );
+        const msg =
+          connection.label === "encrypt"
+            ? `${connection.peer} wants to encrypt connect. Do you accept? (y <key>/n)`
+            : `${connection.peer} wants to connect. Do you accept? (y/n)`;
+        addTerminal(CLI_CHAT, msg);
       });
     });
 
@@ -216,7 +248,7 @@ const App = () => {
 
     peer.on("close", () => {
       setStatus(ONLINE);
-      addTerminal(CLI_CHAT, "Logged out.");
+      addTerminal(CLI_CHAT, "Peer closed.");
     });
 
     peer.on("error", (err) => {
@@ -225,66 +257,84 @@ const App = () => {
     });
   };
 
-  const connectToPeer = (destinationPeerId: string) => {
+  const connectToPeer = (destinationPeerId: string, key: string) => {
     if (peer) {
       const connection = peer.connect(destinationPeerId);
-
-      connection.on("open", () => {
-        setStatus(CONNECTED);
-        setConn(connection);
-        addTerminal(CLI_CHAT, `Connecting to ${destinationPeerId} ...`);
-
-        connection.on("data", (data) => {
-          addTerminal(connection.peer, data as string);
-          saveLog(connection.peer, data as string);
-        });
-      });
-
-      connection.on("error", (err) => {
-        setStatus(LOGGED_IN);
-        addTerminal(
-          CLI_CHAT,
-          `Error connecting to ${destinationPeerId}: ${err.message}`
-        );
-      });
-
-      connection.on("close", () => {
-        setStatus(LOGGED_IN);
-        addTerminal(CLI_CHAT, `Connection to ${destinationPeerId} closed.`);
-      });
+      if (key) {
+        connection.label = "encrypt";
+        setSecretKey(key);
+      } else {
+        connection.label = "";
+        setSecretKey("");
+      }
+      setUpConnectionEvents(connection, destinationPeerId, key);
     }
   };
 
-  const confirmConnect = (response: string) => {
-    if (!pendingConnection) return;
-
-    const connection = pendingConnection;
-
-    if (response === "y") {
+  const setUpConnectionEvents = (
+    connection: DataConnection,
+    peerId: string,
+    key: string
+  ) => {
+    connection.on("open", () => {
       setStatus(CONNECTED);
       setConn(connection);
-      connection.on("data", (data) => {
-        addTerminal(connection.peer, data as string);
-        saveLog(connection.peer, data as string);
-      });
+      addTerminal(CLI_CHAT, `Connecting to ${peerId} ...`);
+    });
 
-      connection.on("error", (err) => {
-        setStatus(LOGGED_IN);
-        addTerminal(
-          CLI_CHAT,
-          `Error connecting to ${connection.peer}: ${err.message}`
-        );
-      });
+    connection.on("data", (data) => {
+      const message = key
+        ? CryptoJS.AES.decrypt(data as string, key).toString(CryptoJS.enc.Utf8)
+        : (data as string);
+      addTerminal(connection.peer, message);
+      saveLog(connection.peer, message);
+    });
 
-      connection.on("close", () => {
-        setStatus(LOGGED_IN);
-        addTerminal(CLI_CHAT, `Connection to ${connection.peer} closed.`);
-      });
+    connection.on("error", (err) => {
+      setStatus(LOGGED_IN);
+      addTerminal(CLI_CHAT, `Error connecting to ${peerId}: ${err.message}`);
+    });
 
-      connection.send(`${peerId} is connected with you.`);
-      addTerminal(CLI_CHAT, `Connected to ${connection.peer}.`);
+    connection.on("close", () => {
+      setStatus(LOGGED_IN);
+      addTerminal(CLI_CHAT, `Connection to ${peerId} closed.`);
+    });
+  };
+
+  const confirmConnect = (command: string) => {
+    if (!pendingConnection) return;
+    const connection = pendingConnection;
+    if (connection.label === "encrypt") {
+      handleEncryptedConnection(command, connection);
+    } else {
+      handleRegularConnection(command, connection);
+    }
+  };
+
+  const handleEncryptedConnection = (
+    command: string,
+    connection: DataConnection
+  ) => {
+    const [accept, key] = command.split(" ");
+    if (accept === "y" && key) {
+      setUpPendingConnection(connection, key);
+    } else if (command === "n") {
+      connection.close();
+      setStatus(LOGGED_IN);
       setPendingConnection(null);
-    } else if (response === "n") {
+      addTerminal(CLI_CHAT, `Connection to ${connection.peer} canceled.`);
+    } else {
+      addTerminal(CLI_CHAT, "Invalid response. Please enter 'y <key>' or 'n'.");
+    }
+  };
+
+  const handleRegularConnection = (
+    command: string,
+    connection: DataConnection
+  ) => {
+    if (command === "y") {
+      setUpPendingConnection(connection);
+    } else if (command === "n") {
       connection.close();
       setStatus(LOGGED_IN);
       setPendingConnection(null);
@@ -294,10 +344,50 @@ const App = () => {
     }
   };
 
+  const setUpPendingConnection = (connection: DataConnection, key?: string) => {
+    setStatus(CONNECTED);
+    setConn(connection);
+    if (key) setSecretKey(key);
+
+    connection.on("data", (data) => {
+      const message = key
+        ? CryptoJS.AES.decrypt(data as string, key).toString(CryptoJS.enc.Utf8)
+        : (data as string);
+      addTerminal(connection.peer, message);
+      saveLog(connection.peer, message);
+    });
+
+    connection.on("error", (err) => {
+      setStatus(LOGGED_IN);
+      addTerminal(
+        CLI_CHAT,
+        `Error connecting to ${connection.peer}: ${err.message}`
+      );
+    });
+
+    connection.on("close", () => {
+      setStatus(LOGGED_IN);
+      addTerminal(CLI_CHAT, `Connection to ${connection.peer} closed.`);
+    });
+
+    connection.send(`${peerId} is connected with you.`);
+    addTerminal(CLI_CHAT, `Connected to ${connection.peer}.`);
+    setPendingConnection(null);
+  };
+
   const sendMessage = (message: string) => {
     if (conn && conn.open) {
-      conn.send(message);
-      saveLog(peerId, message);
+      if (conn.label === "encrypt") {
+        const encryptedMessage = CryptoJS.AES.encrypt(
+          message,
+          secretKey
+        ).toString();
+        conn.send(encryptedMessage);
+        saveLog(peerId, encryptedMessage);
+      } else {
+        conn.send(message);
+        saveLog(peerId, message);
+      }
     }
   };
 
