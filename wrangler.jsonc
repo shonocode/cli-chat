@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Cloudflare Pages project name. Doubles as the public URL slug
+  // (`<name>.pages.dev`). The bare name `cli-chat` is taken globally on
+  // Cloudflare Pages so it gets a random suffix; `clichat` is single-word
+  // and likely free. Change here, then re-run `npm run deploy`.
+  "name": "clichat",
+  "compatibility_date": "2026-04-01",
+  "pages_build_output_dir": "./dist"
+}

@@ -1,0 +1,55 @@
+.PWABadge {
+    /* Wrapper has no layout impact; the toast itself is fixed. */
+}
+
+.PWABadge-toast {
+    position: fixed;
+    /* Pin to the top so the toast cannot occlude the input row. */
+    top: calc(env(safe-area-inset-top, 0) + 8px);
+    left: calc(env(safe-area-inset-left, 0) + 8px);
+    right: calc(env(safe-area-inset-right, 0) + 8px);
+    /* Centered with a comfortable max width on desktop. */
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 420px;
+    padding: 8px 12px;
+    border: 1px solid rgb(50, 255, 0);
+    background-color: black;
+    color: rgb(50, 255, 0);
+    font-family: "VT323", monospace;
+    letter-spacing: .05em;
+    font-size: clamp(13px, 4.2vw, 16px);
+    z-index: 10;
+    text-align: left;
+    /* Subtle phosphor glow to match the CRT theme. */
+    box-shadow: 0 0 8px rgba(50, 255, 0, 0.35);
+}
+
+.PWABadge-message {
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.PWABadge-buttons {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.PWABadge-toast-button {
+    border: 1px solid rgb(50, 255, 0);
+    background: black;
+    color: rgb(50, 255, 0);
+    font-family: "VT323", monospace;
+    letter-spacing: .05em;
+    font-size: inherit;
+    padding: 4px 12px;
+    cursor: pointer;
+}
+
+.PWABadge-toast-button:hover,
+.PWABadge-toast-button:focus {
+    background: rgb(50, 255, 0);
+    color: black;
+    outline: none;
+}

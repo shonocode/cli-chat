@@ -1,0 +1,69 @@
+{
+  "name": "cli-chat",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Terminal-style P2P chat PWA with optional end-to-end encryption, running entirely in the browser over WebRTC.",
+  "license": "MIT",
+  "author": "shonocode",
+  "homepage": "https://clichat.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shonocode/cli-chat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shonocode/cli-chat/issues"
+  },
+  "keywords": [
+    "p2p",
+    "chat",
+    "webrtc",
+    "peerjs",
+    "pwa",
+    "cli",
+    "end-to-end-encryption",
+    "react",
+    "typescript"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint . --max-warnings 0",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy": "npm run build && wrangler pages deploy",
+    "preview:pages": "npm run build && wrangler pages dev"
+  },
+  "dependencies": {
+    "@fontsource/vt323": "^5.2.7",
+    "peerjs": "^1.5.5",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vite-pwa/assets-generator": "^1.0.2",
+    "@vitejs/plugin-react": "^5.2.0",
+    "@vitest/coverage-v8": "^4.1.4",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "jsdom": "^29.0.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^7.3.2",
+    "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.85.0"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.5"
+  }
+}
